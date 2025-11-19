@@ -10,7 +10,7 @@ jobs:
     name: Run pr agent on every pull request
     steps:
       - name: pr-agent-nuwm
-        uses: EzGrade/Pr-Agent-NUWM@main
+        uses: zhukovskyy/Pr-Agent-NUWM@main
         env:
           GIT_APP_ID: ${{ secrets.GIT_APP_ID }}
           GIT_PRIVATE_KEY: ${{ secrets.GIT_PRIVATE_KEY }}

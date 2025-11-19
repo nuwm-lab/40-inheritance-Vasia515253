@@ -2,68 +2,80 @@ using System;
 
 namespace LabWork
 {
-    class Practicant
+    class Triangle
     {
-        public string Surname { get; private set; }
-        public string Name { get; private set; }
-        public string University { get; private set; }
+        protected (double x, double y)[] vertices = new (double x, double y)[3];
 
-        // java 
-
-        public void SetData(string surname, string name, string university)
+        public virtual void SetVertices((double x, double y) a,
+                                        (double x, double y) b,
+                                        (double x, double y) c)
         {
-            Surname = surname;
-            Name = name;
-            University = university;
+            vertices[0] = a;
+            vertices[1] = b;
+            vertices[2] = c;
         }
 
-        // Метод перевірки чи прізвище симетричне: наприклад "Анна", "Оно"
-        public bool IsSurnameSymmetric()
+        public virtual void PrintVertices()
         {
-            if (string.IsNullOrWhiteSpace(Surname))
-                return false;
+            Console.WriteLine("Вершини трикутника:");
+            for (int i = 0; i < 3; i++)
+            {
+                Console.WriteLine($"V{i + 1}: ({vertices[i].x}, {vertices[i].y})");
+            }
+        }
 
-            string lower = Surname.ToLower();
-            char[] arr = lower.ToCharArray();
-            Array.Reverse(arr);
-            string reversed = new string(arr);
+        public virtual double GetArea()
+        {
+            // Формула площі трикутника через координати
+            double x1 = vertices[0].x, y1 = vertices[0].y;
+            double x2 = vertices[1].x, y2 = vertices[1].y;
+            double x3 = vertices[2].x, y3 = vertices[2].y;
 
-            return lower == reversed;
+            return Math.Abs(
+                x1 * (y2 - y3) +
+                x2 * (y3 - y1) +
+                x3 * (y1 - y2)
+            ) / 2.0;
         }
     }
 
-    class FirmEmployee : Practicant
+    class ConvexQuadrilateral : Triangle
     {
-        public DateTime HireDate { get; private set; }
-        public string FinishedEducation { get; private set; }
-        public string Position { get; private set; }
-
-        public void SetData(
-            string surname,
-            string name,
-            string university,
-            DateTime hireDate,
-            string finishedEducation,
-            string position)
+        public ConvexQuadrilateral()
         {
-            base.SetData(surname, name, university);
-
-            HireDate = hireDate;
-            FinishedEducation = finishedEducation;
-            Position = position;
+            vertices = new (double x, double y)[4];
         }
 
-        public int GetWorkExperienceYears()
+        public void SetVertices((double x, double y) a,
+                                (double x, double y) b,
+                                (double x, double y) c,
+                                (double x, double y) d)
         {
-            DateTime now = DateTime.Now;
-            int years = now.Year - HireDate.Year;
+            vertices[0] = a;
+            vertices[1] = b;
+            vertices[2] = c;
+            vertices[3] = d;
+        }
 
-            if (HireDate > now.AddYears(-years))
+        public override void PrintVertices()
+        {
+            Console.WriteLine("Вершини опуклого чотирикутника:");
+            for (int i = 0; i < 4; i++)
             {
-                years--;
+                Console.WriteLine($"V{i + 1}: ({vertices[i].x}, {vertices[i].y})");
             }
+        }
 
-            return years;
+        public override double GetArea()
+        {
+            // Площа опуклого чотирикутника: розбиваємо на два трикутники
+            var tri1 = new Triangle();
+            tri1.SetVertices(vertices[0], vertices[1], vertices[2]);
+
+            var tri2 = new Triangle();
+            tri2.SetVertices(vertices[0], vertices[2], vertices[3]);
+
+            return tri1.GetArea() + tri2.GetArea();
         }
     }
 
@@ -71,25 +83,19 @@ namespace LabWork
     {
         static void Main(string[] args)
         {
-            // Створюємо практиканта
-            Practicant practicant = new Practicant();
-            practicant.SetData("Анна", "Ігорівна", "НУВГП");
+            // --- Трикутник ---
+            Triangle triangle = new Triangle();
+            triangle.SetVertices((0, 0), (4, 0), (0, 3));
 
-            Console.WriteLine("Практикант:");
-            Console.WriteLine($"Прізвище симетричне? {practicant.IsSurnameSymmetric()}");
+            triangle.PrintVertices();
+            Console.WriteLine($"Площа трикутника: {triangle.GetArea()}\n");
 
-            // Створюємо працівника фірми
-            FirmEmployee employee = new FirmEmployee();
-            employee.SetData(
-                "Шевченко",
-                "Олександр",
-                "КПІ",
-                new DateTime(2020, 5, 10),
-                "КПІ",
-                "Інженер");
+            // --- Опуклий чотирикутник ---
+            ConvexQuadrilateral quad = new ConvexQuadrilateral();
+            quad.SetVertices((0, 0), (4, 0), (5, 3), (0, 4));
 
-            Console.WriteLine("\nПрацівник фірми:");
-            Console.WriteLine($"Стаж роботи: {employee.GetWorkExperienceYears()} років");
+            quad.PrintVertices();
+            Console.WriteLine($"Площа чотирикутника: {quad.GetArea()}\n");
         }
     }
 }

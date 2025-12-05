@@ -1,13 +1,11 @@
 using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
 
 namespace Geometry
 {
     /// <summary>
     /// Представляє 2D точку.
     /// </summary>
-    public struct Point
+    public readonly struct Point : IEquatable<Point>
     {
         public double X { get; }
         public double Y { get; }
@@ -18,83 +16,84 @@ namespace Geometry
             Y = y;
         }
 
+        public bool Equals(Point other)
+        {
+            return Math.Abs(X - other.X) < 1e-9 && Math.Abs(Y - other.Y) < 1e-9;
+        }
+
+        public override bool Equals(object obj) => obj is Point other && Equals(other);
+
+        public override int GetHashCode() => HashCode.Combine(X, Y);
+
+        public static bool operator ==(Point left, Point right) => left.Equals(right);
+        public static bool operator !=(Point left, Point right) => !left.Equals(right);
+
         public override string ToString() => $"({X:F2}, {Y:F2})";
     }
 
     /// <summary>
     /// Абстрактний полігон з методом обчислення площі (Shoelace).
-    /// Обмеження: методи перевірки та сортування розраховані на опуклі полігони.
-    /// Для увігнутих полігонів може знадобитися інша реалізація.
+    /// Обмеження: сортування вершин за кутом працює для опуклих полігонів.
+    /// Для увігнутих полігонів потрібна інша реалізація.
     /// </summary>
-    public abstract class Polygon : IDisposable
+    public abstract class Polygon
     {
         protected const double Epsilon = 1e-9;
-        private readonly List<Point> _points = new List<Point>();
+        private readonly System.Collections.Generic.List<Point> _points = new System.Collections.Generic.List<Point>();
 
-        /// <summary>
-        /// Точки полігону доступні тільки для читання.
-        /// Вершини автоматично впорядковуються за кутом відносно центру при валідації.
-        /// </summary>
-        public IReadOnlyList<Point> Points => _points.AsReadOnly();
+        public System.Collections.Generic.IReadOnlyList<Point> Points => _points.AsReadOnly();
 
         /// <summary>
         /// Встановлює вершини полігону з валідацією.
-        /// Для змінних фігур використовуйте окремі методи SetVertices.
         /// </summary>
-        /// <param name="points">Колекція вершин полігону</param>
-        protected void SetPoints(IEnumerable<Point> points)
+        protected void SetPoints(System.Collections.Generic.IEnumerable<Point> points)
         {
+            if (points == null)
+                throw new ArgumentNullException(nameof(points));
+
             _points.Clear();
             _points.AddRange(points);
             ValidatePoints();
         }
 
         /// <summary>
-        /// Встановлює вершини полігону (публічний аналог SetPoints).
+        /// Встановлює вершини полігону.
         /// </summary>
-        public void SetVertices(IEnumerable<Point> vertices)
+        public void SetVertices(System.Collections.Generic.IEnumerable<Point> vertices)
         {
             SetPoints(vertices);
         }
 
         /// <summary>
-        /// Перевірка коректності масиву точок.
-        /// Увага: цей метод сортує вершини за кутом відносно центру
-        /// перед виконанням будь-яких додаткових перевірок у похідних класах.
-        /// Обмеження: сортування за кутом працює коректно для опуклих полігонів,
-        /// для увігнутих може бути потрібна інша логіка.
+        /// Перевірка коректності вершин.
+        /// Увага: сортує вершини за кутом, що працює для опуклих полігонів.
         /// </summary>
         protected virtual void ValidatePoints()
         {
             if (_points.Count < 3)
-                throw new ArgumentException("Полігон повинен мати мінімум 3 точки.");
+                throw new ArgumentException("Полігон повинен мати мінімум 3 точки.", nameof(_points));
 
             CheckDuplicates();
             OrderVertices();
         }
 
-        /// <summary>
-        /// Перевірка на дублікати точок.
-        /// </summary>
         private void CheckDuplicates()
         {
             for (int i = 0; i < _points.Count; i++)
             {
                 for (int j = i + 1; j < _points.Count; j++)
                 {
-                    if (IsNearlyZero(_points[i].X - _points[j].X) &&
-                        IsNearlyZero(_points[i].Y - _points[j].Y))
+                    if (_points[i].Equals(_points[j]))
                     {
-                        throw new ArgumentException("Масив містить однакові точки.");
+                        throw new ArgumentException("Масив містить однакові точки.", nameof(_points));
                     }
                 }
             }
         }
 
         /// <summary>
-        /// Впорядкування вершин полігону за кутом відносно центру.
-        /// Обмеження: цей метод найкраще працює для опуклих полігонів.
-        /// Для увігнутих полігонів може бути потрібна інша стратегія сортування.
+        /// Сортує вершини за кутом відносно центру.
+        /// Обмеження: працює для опуклих полігонів.
         /// </summary>
         protected void OrderVertices()
         {
@@ -117,10 +116,6 @@ namespace Geometry
             });
         }
 
-        /// <summary>
-        /// Обчислює площу полігону за формулою шнурка (Shoelace).
-        /// </summary>
-        /// <returns>Площа полігону</returns>
         public virtual double GetArea()
         {
             double sum = 0;
@@ -135,53 +130,29 @@ namespace Geometry
             return Math.Abs(sum) / 2.0;
         }
 
-        /// <summary>
-        /// Перевіряє, чи значення близьке до нуля з урахуванням похибки.
-        /// </summary>
-        /// <param name="value">Значення для перевірки</param>
-        /// <returns>True, якщо значення близьке до нуля</returns>
         protected bool IsNearlyZero(double value) => Math.Abs(value) < Epsilon;
-
-        /// <summary>
-        /// Очищує ресурси полігону.
-        /// </summary>
-        public void Dispose()
-        {
-            _points.Clear();
-            GC.SuppressFinalize(this);
-        }
 
         public override string ToString() => $"Полігон: {Points.Count} вершин, площа = {GetArea():F4}";
     }
 
     /// <summary>
     /// Клас трикутника.
-    /// Підтримує тільки невироджені трикутники (площі > 0).
     /// </summary>
     public class Triangle : Polygon
     {
-        /// <summary>
-        /// Створює трикутник з трьох точок.
-        /// </summary>
         public Triangle(Point a, Point b, Point c)
         {
             SetPoints(new[] { a, b, c });
         }
 
-        /// <summary>
-        /// Створює трикутник з масиву точок.
-        /// </summary>
         public static Triangle FromPoints(params Point[] points)
         {
             if (points.Length != 3)
-                throw new ArgumentException("Трикутник повинен мати рівно 3 точки.");
+                throw new ArgumentException("Трикутник повинен мати рівно 3 точки.", nameof(points));
             
             return new Triangle(points[0], points[1], points[2]);
         }
 
-        /// <summary>
-        /// Створює трикутник з координат.
-        /// </summary>
         public static Triangle FromCoordinates(double x1, double y1, double x2, double y2, double x3, double y3)
         {
             return new Triangle(new Point(x1, y1), new Point(x2, y2), new Point(x3, y3));
@@ -203,40 +174,30 @@ namespace Geometry
                 p[2].X * (p[0].Y - p[1].Y);
 
             if (IsNearlyZero(area2))
-                throw new ArgumentException("Точки трикутника лежать на одній прямій (колінеарні).");
+                throw new ArgumentException("Точки трикутника лежать на одній прямій.", nameof(_points));
         }
 
-        public override string ToString() => $"Трикутник: вершини {Points[0]}, {Points[1]}, {Points[2]}, площа = {GetArea():F4}";
+        public override string ToString() => $"Трикутник: {Points[0]}, {Points[1]}, {Points[2]}, площа = {GetArea():F4}";
     }
 
     /// <summary>
     /// Опуклий чотирикутник.
-    /// Підтримує тільки опуклі чотирикутники без самоперетинів.
     /// </summary>
     public class ConvexQuadrilateral : Polygon
     {
-        /// <summary>
-        /// Створює опуклий чотирикутник з чотирьох точок.
-        /// </summary>
         public ConvexQuadrilateral(Point a, Point b, Point c, Point d)
         {
             SetPoints(new[] { a, b, c, d });
         }
 
-        /// <summary>
-        /// Створює опуклий чотирикутник з масиву точок.
-        /// </summary>
         public static ConvexQuadrilateral FromPoints(params Point[] points)
         {
             if (points.Length != 4)
-                throw new ArgumentException("Чотирикутник повинен мати рівно 4 точки.");
+                throw new ArgumentException("Чотирикутник повинен мати рівно 4 точки.", nameof(points));
             
             return new ConvexQuadrilateral(points[0], points[1], points[2], points[3]);
         }
 
-        /// <summary>
-        /// Створює опуклий чотирикутник з координат.
-        /// </summary>
         public static ConvexQuadrilateral FromCoordinates(double x1, double y1, double x2, double y2, 
                                                           double x3, double y3, double x4, double y4)
         {
@@ -248,13 +209,10 @@ namespace Geometry
         protected override void ValidatePoints()
         {
             base.ValidatePoints();
-            CheckConvexityAndNoIntersections();
+            CheckConvexity();
         }
 
-        /// <summary>
-        /// Перевіряє опуклість і відсутність самоперетинів.
-        /// </summary>
-        private void CheckConvexityAndNoIntersections()
+        private void CheckConvexity()
         {
             var pts = Points;
             int n = pts.Count;
@@ -272,17 +230,16 @@ namespace Geometry
                     (p1.Y - p0.Y) * (p2.X - p0.X);
 
                 if (IsNearlyZero(cross))
-                    throw new ArgumentException("Чотирикутник містить колінеарні точки.");
+                    throw new ArgumentException("Чотирикутник містить колінеарні точки.", nameof(_points));
 
                 bool current = cross > 0;
 
                 if (sign == null)
                     sign = current;
                 else if (sign != current)
-                    throw new ArgumentException("Фігура не є опуклим чотирикутником.");
+                    throw new ArgumentException("Фігура не є опуклим чотирикутником.", nameof(_points));
             }
 
-            // Додаткова перевірка на самоперетин (перетин несуміжних сторін)
             CheckSelfIntersection();
         }
 
@@ -290,9 +247,8 @@ namespace Geometry
         {
             var pts = Points;
             
-            // Перевіряємо перетин діагоналей (діагоналі в опуклому чотирикутнику мають перетинатися)
             if (!DoSegmentsIntersect(pts[0], pts[2], pts[1], pts[3]))
-                throw new ArgumentException("Чотирикутник має самоперетин або не є опуклим.");
+                throw new ArgumentException("Чотирикутник має самоперетин.", nameof(_points));
         }
 
         private bool DoSegmentsIntersect(Point a, Point b, Point c, Point d)
@@ -311,7 +267,6 @@ namespace Geometry
 
             bool hasIntersection = d1 * d2 < 0 && d3 * d4 < 0;
             
-            // Додатково перевіряємо вироджені випадки
             if (IsNearlyZero(d1) && IsPointOnSegment(x3, y3, x4, y4, x1, y1)) return true;
             if (IsNearlyZero(d2) && IsPointOnSegment(x3, y3, x4, y4, x2, y2)) return true;
             if (IsNearlyZero(d3) && IsPointOnSegment(x1, y1, x2, y2, x3, y3)) return true;
@@ -334,127 +289,46 @@ namespace Geometry
             return IsNearlyZero(cross);
         }
 
-        public override string ToString() => $"Опуклий чотирикутник: вершини {Points[0]}, {Points[1]}, {Points[2]}, {Points[3]}, площа = {GetArea():F4}";
+        public override string ToString() => $"Опуклий чотирикутник: {Points[0]}, {Points[1]}, {Points[2]}, {Points[3]}, площа = {GetArea():F4}";
     }
 
     /// <summary>
-    /// Клас для запуску програми.
+    /// Допоміжний клас для тестування.
     /// </summary>
-    public static class Program
+    public static class PolygonTests
     {
-        /// <summary>
-        /// Головний метод програми.
-        /// </summary>
-        public static void Main(string[] args)
+        public static void RunAllTests()
         {
-            try
-            {
-                RunExamples();
-                
-                // Запуск тестів при наявності прапора
-                if (args.Length > 0 && args[0] == "--test")
-                {
-                    RunTests();
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Помилка: {ex.Message}");
-            }
-            
-            // Затримка тільки в інтерактивному режимі
-            if (System.Environment.UserInteractive && args.Length == 0)
-            {
-                Console.WriteLine("\nНатисніть будь-яку клавішу для виходу...");
-                Console.ReadKey();
-            }
-        }
-
-        private static void RunExamples()
-        {
-            Console.WriteLine("Демонстрація геометричних фігур");
-            Console.WriteLine("================================");
-            
-            // Приклад 1: Трикутник з використанням конструктора
-            using (var triangle = new Triangle(
-                new Point(0, 0),
-                new Point(4, 0),
-                new Point(0, 3)))
-            {
-                Console.WriteLine($"Приклад 1: {triangle}");
-                Console.WriteLine($"Площа: {triangle.GetArea():F4}");
-            }
-            
-            // Приклад 2: Трикутник з фабричного методу
-            var triangle2 = Triangle.FromCoordinates(1, 1, 5, 1, 3, 4);
-            Console.WriteLine($"\nПриклад 2: {triangle2}");
-            Console.WriteLine($"Площа: {triangle2.GetArea():F4}");
-            
-            // Приклад 3: Чотирикутник з конструктора
-            using (var quadrilateral = new ConvexQuadrilateral(
-                new Point(0, 0),
-                new Point(4, 0),
-                new Point(3, 3),
-                new Point(0, 4)))
-            {
-                Console.WriteLine($"\nПриклад 3: {quadrilateral}");
-                Console.WriteLine($"Площа: {quadrilateral.GetArea():F4}");
-            }
-            
-            // Приклад 4: Чотирикутник з фабричного методу
-            var quadrilateral2 = ConvexQuadrilateral.FromCoordinates(1, 1, 5, 1, 6, 4, 2, 5);
-            Console.WriteLine($"\nПриклад 4: {quadrilateral2}");
-            Console.WriteLine($"Площа: {quadrilateral2.GetArea():F4}");
-            
-            // Приклад 5: Зміна вершин через SetVertices
-            var triangle3 = Triangle.FromCoordinates(0, 0, 2, 0, 1, 1);
-            Console.WriteLine($"\nПриклад 5 (до зміни): {triangle3}");
-            
-            triangle3.SetVertices(new[] { new Point(0, 0), new Point(3, 0), new Point(1.5, 2) });
-            Console.WriteLine($"Приклад 5 (після зміни): {triangle3}");
-        }
-
-        private static void RunTests()
-        {
-            Console.WriteLine("\nТестування граничних випадків");
-            Console.WriteLine("=============================");
-            
             TestValidTriangle();
             TestColinearPoints();
             TestDuplicatePoints();
             TestInvalidQuadrilateral();
+            TestValidQuadrilateral();
             
-            Console.WriteLine("Всі тести пройдено успішно!");
+            Console.WriteLine("Всі тести пройдено!");
         }
 
         private static void TestValidTriangle()
         {
-            try
-            {
-                var triangle = Triangle.FromCoordinates(0, 0, 3, 0, 0, 4);
-                double area = triangle.GetArea();
-                Console.WriteLine($"✓ Валідний трикутник: площа = {area:F4}");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"✗ Неочікувана помилка: {ex.Message}");
-            }
+            var triangle = Triangle.FromCoordinates(0, 0, 3, 0, 0, 4);
+            double area = triangle.GetArea();
+            
+            if (Math.Abs(area - 6.0) > 1e-9)
+                throw new Exception($"Невірна площа трикутника: {area}");
+            
+            Console.WriteLine("✓ Валідний трикутник");
         }
 
         private static void TestColinearPoints()
         {
             try
             {
-                var triangle = Triangle.FromCoordinates(0, 0, 2, 2, 4, 4);
-                Console.WriteLine($"✗ Очікувалась помилка колінеарності");
+                Triangle.FromCoordinates(0, 0, 2, 2, 4, 4);
+                throw new Exception("Очікувалась помилка колінеарності");
             }
-            catch (ArgumentException ex) when (ex.Message.Contains("колінеарні"))
+            catch (ArgumentException ex) when (ex.Message.Contains("на одній прямій"))
             {
-                Console.WriteLine($"✓ Коректно виявлено колінеарні точки");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"✗ Неочікувана помилка: {ex.Message}");
+                Console.WriteLine("✓ Коректно виявлено колінеарні точки");
             }
         }
 
@@ -462,36 +336,103 @@ namespace Geometry
         {
             try
             {
-                var triangle = Triangle.FromCoordinates(0, 0, 0, 0, 3, 4);
-                Console.WriteLine($"✗ Очікувалась помилка дублікатів");
+                Triangle.FromCoordinates(0, 0, 0, 0, 3, 4);
+                throw new Exception("Очікувалась помилка дублікатів");
             }
-            catch (ArgumentException ex) when (ex.Message.Contains("однакові"))
+            catch (ArgumentException ex) when (ex.Message.Contains("однакові точки"))
             {
-                Console.WriteLine($"✓ Коректно виявлено дублікати точок");
+                Console.WriteLine("✓ Коректно виявлено дублікати точок");
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"✗ Неочікувана помилка: {ex.Message}");
-            }
+        }
+
+        private static void TestValidQuadrilateral()
+        {
+            var quad = ConvexQuadrilateral.FromCoordinates(0, 0, 4, 0, 4, 3, 0, 3);
+            double area = quad.GetArea();
+            
+            if (Math.Abs(area - 12.0) > 1e-9)
+                throw new Exception($"Невірна площа чотирикутника: {area}");
+            
+            Console.WriteLine("✓ Валідний опуклий чотирикутник");
         }
 
         private static void TestInvalidQuadrilateral()
         {
             try
             {
-                // Самоперетинний чотирикутник
-                var quad = ConvexQuadrilateral.FromCoordinates(0, 0, 3, 3, 0, 3, 3, 0);
-                Console.WriteLine($"✗ Очікувалась помилка неопуклого чотирикутника");
+                ConvexQuadrilateral.FromCoordinates(0, 0, 3, 3, 0, 3, 3, 0);
+                throw new Exception("Очікувалась помилка неопуклого чотирикутника");
             }
-            catch (ArgumentException ex) when (ex.Message.Contains("не є опуклим") || 
-                                               ex.Message.Contains("самоперетин"))
+            catch (ArgumentException ex) when (ex.Message.Contains("не є опуклим") || ex.Message.Contains("самоперетин"))
             {
-                Console.WriteLine($"✓ Коректно виявлено неопуклий чотирикутник");
+                Console.WriteLine("✓ Коректно виявлено неопуклий чотирикутник");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Головний клас програми.
+    /// </summary>
+    public static class Program
+    {
+        public static void Main(string[] args)
+        {
+            Console.WriteLine("Геометричні фігури");
+            Console.WriteLine("==================\n");
+
+            try
+            {
+                RunExamples();
+                
+                if (args.Length > 0 && args[0] == "--test")
+                {
+                    Console.WriteLine("\nЗапуск тестів...");
+                    PolygonTests.RunAllTests();
+                }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"✗ Неочікувана помилка: {ex.Message}");
+                Console.WriteLine($"Помилка: {ex.Message}");
+                return;
             }
+
+            if (System.Environment.UserInteractive && args.Length == 0)
+            {
+                Console.WriteLine("\nНатисніть будь-яку клавішу...");
+                Console.ReadKey();
+            }
+        }
+
+        private static void RunExamples()
+        {
+            // Трикутник
+            var triangle1 = new Triangle(
+                new Point(0, 0),
+                new Point(4, 0),
+                new Point(0, 3));
+            
+            Console.WriteLine($"1. {triangle1}");
+
+            // Трикутник через фабричний метод
+            var triangle2 = Triangle.FromCoordinates(1, 1, 5, 1, 3, 4);
+            Console.WriteLine($"2. {triangle2}");
+
+            // Зміна вершин
+            triangle2.SetVertices(new[] { new Point(0, 0), new Point(3, 0), new Point(1.5, 2) });
+            Console.WriteLine($"3. Після зміни: {triangle2}");
+
+            // Чотирикутник
+            var quadrilateral = new ConvexQuadrilateral(
+                new Point(0, 0),
+                new Point(4, 0),
+                new Point(3, 3),
+                new Point(0, 4));
+            
+            Console.WriteLine($"4. {quadrilateral}");
+
+            // Чотирикутник через фабричний метод
+            var quadrilateral2 = ConvexQuadrilateral.FromCoordinates(1, 1, 5, 1, 6, 4, 2, 5);
+            Console.WriteLine($"5. {quadrilateral2}");
         }
     }
 }

@@ -1,10 +1,10 @@
 using System;
-using System.Linq;
+using System.Collections.Generic;
 
 namespace LabWork
 {
     // ------------------------------------------------------------
-    // Структура для точки
+    // Структура точки
     // ------------------------------------------------------------
     public struct Point
     {
@@ -21,7 +21,7 @@ namespace LabWork
     }
 
     // ------------------------------------------------------------
-    // Інтерфейс для геометричних фігур
+    // Інтерфейс фігури
     // ------------------------------------------------------------
     public interface IShape
     {
@@ -30,13 +30,14 @@ namespace LabWork
     }
 
     // ------------------------------------------------------------
-    // Базовий клас багатокутника
+    // Абстрактний багатокутник
     // ------------------------------------------------------------
     public abstract class Polygon : IShape
     {
-        protected Point[] _points;
+        private Point[] _points;
+        private const double Epsilon = 1e-9;
 
-        public IReadOnlyList<Point> Points => _points;
+        public IReadOnlyList<Point> Points => Array.AsReadOnly(_points);
 
         protected Polygon(params Point[] points)
         {
@@ -46,14 +47,13 @@ namespace LabWork
         public virtual void SetPoints(params Point[] points)
         {
             if (points == null || points.Length < 3)
-                throw new ArgumentException("Багатокутник повинен мати мінімум 3 вершини.");
+                throw new ArgumentException("Фігура повинна мати мінімум 3 вершини.");
 
-            _points = points;
+            // Робимо копію щоб уникнути сторонньої модифікації
+            _points = (Point[])points.Clone();
         }
 
-        /// <summary>
-        /// Формула «Shoelace» (Гаусса) для площі багатокутника
-        /// </summary>
+        /// <summary>Площа методом Shoelace</summary>
         public virtual double Area()
         {
             double sum = 0;
@@ -71,9 +71,18 @@ namespace LabWork
         {
             Console.WriteLine($"{GetType().Name}:");
             for (int i = 0; i < _points.Length; i++)
-            {
                 Console.WriteLine($"P{i + 1} = {_points[i]}");
-            }
+        }
+
+        protected bool NearlyZero(double value)
+        {
+            return Math.Abs(value) < Epsilon;
+        }
+
+        protected double Cross(Point a, Point b, Point c)
+        {
+            return (b.X - a.X) * (c.Y - a.Y) -
+                   (b.Y - a.Y) * (c.X - a.X);
         }
     }
 
@@ -90,10 +99,11 @@ namespace LabWork
 
         private void Validate()
         {
-            double area = Area();
-            if (area == 0)
-                throw new ArgumentException("Точки трикутника лежать на одній прямій (площа = 0).");
+            if (NearlyZero(Area()))
+                throw new ArgumentException("Трикутник вироджений: точки лежать на одній прямій.");
         }
+
+        private bool NearlyZero(double v) => Math.Abs(v) < 1e-9;
     }
 
     // ------------------------------------------------------------
@@ -104,69 +114,89 @@ namespace LabWork
         public ConvexQuadrilateral(Point p1, Point p2, Point p3, Point p4)
             : base(p1, p2, p3, p4)
         {
-            ValidateConvex();
+            OrderVertices();
+            ValidateConvexity();
         }
 
-        private void ValidateConvex()
+        /// <summary>
+        /// Упорядковує вершини за кутом навколо центру мас.
+        /// Гарантує правильний обхід для перевірки опуклості.
+        /// </summary>
+        private void OrderVertices()
         {
-            // Перевірка опуклості за знаком псевдоскалярного добутку
-            int n = _points.Length;
-            bool? isPositive = null;
+            var pts = new List<Point>(Points);
+
+            // Центр мас
+            double cx = 0, cy = 0;
+            foreach (var p in pts)
+            {
+                cx += p.X;
+                cy += p.Y;
+            }
+            cx /= pts.Count;
+            cy /= pts.Count;
+
+            pts.Sort((a, b) =>
+            {
+                double angA = Math.Atan2(a.Y - cy, a.X - cx);
+                double angB = Math.Atan2(b.Y - cy, b.X - cx);
+                return angA.CompareTo(angB);
+            });
+
+            SetPoints(pts.ToArray());
+        }
+
+        private void ValidateConvexity()
+        {
+            int n = Points.Count;
+            bool? positive = null;
 
             for (int i = 0; i < n; i++)
             {
-                Point a = _points[i];
-                Point b = _points[(i + 1) % n];
-                Point c = _points[(i + 2) % n];
+                Point a = Points[i];
+                Point b = Points[(i + 1) % n];
+                Point c = Points[(i + 2) % n];
 
-                double cross = CrossProduct(a, b, c);
+                double cross = Cross(a, b, c);
 
-                if (cross == 0)
-                    throw new ArgumentException("Чотирикутник вироджений (три вершини лежать на одній лінії).");
+                if (Math.Abs(cross) < 1e-9)
+                    throw new ArgumentException("Вироджений чотирикутник: три точки колінеарні.");
 
-                bool current = cross > 0;
+                bool currentPositive = cross > 0;
 
-                if (isPositive == null)
-                    isPositive = current;
-                else if (isPositive != current)
-                    throw new ArgumentException("Чотирикутник не опуклий.");
+                if (positive == null)
+                    positive = currentPositive;
+                else if (positive != currentPositive)
+                    throw new ArgumentException("Чотирикутник не є опуклим.");
             }
-        }
-
-        private static double CrossProduct(Point a, Point b, Point c)
-        {
-            return (b.X - a.X) * (c.Y - a.Y) -
-                   (b.Y - a.Y) * (c.X - a.X);
         }
     }
 
     // ------------------------------------------------------------
-    // Програма
+    // Головна програма
     // ------------------------------------------------------------
     class Program
     {
         static void Main(string[] args)
         {
-            // ---------------- Трикутник ----------------
-            Triangle triangle = new Triangle(
+            Triangle t = new Triangle(
                 new Point(0, 0),
                 new Point(4, 0),
                 new Point(0, 3)
             );
 
-            triangle.PrintPoints();
-            Console.WriteLine($"Площа трикутника = {triangle.Area()}\n");
+            t.PrintPoints();
+            Console.WriteLine($"Площа трикутника = {t.Area()}\n");
 
-            // ---------------- Опуклий чотирикутник ----------------
-            ConvexQuadrilateral quad = new ConvexQuadrilateral(
+            ConvexQuadrilateral q = new ConvexQuadrilateral(
                 new Point(0, 0),
                 new Point(4, 0),
                 new Point(5, 3),
                 new Point(0, 3)
             );
 
-            quad.PrintPoints();
-            Console.WriteLine($"Площа чотирикутника = {quad.Area()}");
+            q.PrintPoints();
+            Console.WriteLine($"Площа чотирикутника = {q.Area()}");
         }
     }
 }

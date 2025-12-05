@@ -1,5 +1,5 @@
 name: PR Agent for NUWM
-# коьуте
+
 on:
   pull_request:
     types: [ opened, reopened, synchronize, edited ]
@@ -10,7 +10,7 @@ jobs:
     name: Run pr agent on every pull request
     steps:
       - name: pr-agent-nuwm
-        uses: zhukovskyy/Pr-Agent-NUWM@main
+        uses: EzGrade/Pr-Agent-NUWM@main
         env:
           GIT_APP_ID: ${{ secrets.GIT_APP_ID }}
           GIT_PRIVATE_KEY: ${{ secrets.GIT_PRIVATE_KEY }}
@@ -22,4 +22,4 @@ jobs:
           GOOGLE_SPREADSHEET_URL: ${{ secrets.GOOGLE_SPREADSHEET_URL }}
           GOOGLE_SHEETS_NAMING: ${{ secrets.GOOGLE_SHEETS_NAMING }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
+          
